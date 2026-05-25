@@ -10,6 +10,14 @@
 
 ---
 
+## 📸 Preview
+
+![Dashboard - Portfolio Summary & PnL](docs/dashboard_screenshot.png)
+
+![Dashboard - Correlations & Drawdown](docs/dashboard_screenshot_2.png)
+
+---
+
 ## 🎯 Project Overview
 
 Delta One desks trade products whose value moves one-for-one with an underlying asset: ETFs,
