@@ -1,0 +1,110 @@
+# ─────────────────────────────────────────────
+#  Real-Time Delta One Risk Dashboard
+#  Configuration file
+# ─────────────────────────────────────────────
+
+app:
+  title: "Delta One Risk Dashboard"
+  refresh_interval_seconds: 60   # auto-refresh du dashboard
+  environment: "dev"             # dev | prod
+
+# ── Portefeuille fictif ──────────────────────
+portfolio:
+  benchmark: "SPY"
+  currency: "USD"
+  positions:
+    - ticker: "SPY"
+      name: "S&P 500 ETF"
+      quantity: 500
+      entry_price: 745.64
+      side: "long"
+      asset_class: "Equity ETF"
+      geography: "US"
+
+    - ticker: "QQQ"
+      name: "Nasdaq 100 ETF"
+      quantity: -300
+      entry_price: 717.64
+      side: "short"
+      asset_class: "Equity ETF"
+      geography: "US"
+
+    - ticker: "EWQ"
+      name: "iShares MSCI France ETF (Euro Stoxx proxy)"
+      quantity: 400
+      entry_price: 45.17
+      side: "long"
+      asset_class: "Equity ETF"
+      geography: "Europe"
+
+    - ticker: "IWM"
+      name: "Russell 2000 ETF"
+      quantity: 200
+      entry_price: 285.12
+      side: "long"
+      asset_class: "Equity ETF"
+      geography: "US"
+
+    - ticker: "^VIX"
+      name: "VIX Index"
+      quantity: 0           # indicateur seulement, pas en position
+      entry_price: 0.0
+      side: "indicator"
+      asset_class: "Volatility"
+      geography: "Global"
+
+    - ticker: "EURUSD=X"
+      name: "EUR/USD FX Rate"
+      quantity: 0           # indicateur FX
+      entry_price: 0.0
+      side: "indicator"
+      asset_class: "FX"
+      geography: "Global"
+
+# ── Données de marché ─────────────────────────
+market_data:
+  source: "yfinance"            # yfinance | alpha_vantage | simulated
+  history_period: "1y"          # période pour calculs historiques
+  history_interval: "1d"        # 1d | 1h | 5m
+  tickers:
+    - "SPY"
+    - "QQQ"
+    - "EWQ"
+    - "IWM"
+    - "^GSPC"    # S&P 500 index (benchmark)
+    - "^VIX"
+    - "EURUSD=X"
+
+# ── Base de données ───────────────────────────
+database:
+  type: "sqlite"               # sqlite | postgresql
+  sqlite_path: "data/dashboard.db"
+  # PostgreSQL (décommentez pour prod / cloud)
+  # host: "localhost"
+  # port: 5432
+  # name: "delta_one_db"
+  # user: "admin"
+  # password: "${DB_PASSWORD}"  # via variable d'environnement
+
+# ── Paramètres de risque ──────────────────────
+risk:
+  var_confidence: 0.95          # niveau de confiance VaR
+  var_lookback_days: 252        # fenêtre historique VaR
+  rolling_vol_window: 20        # jours pour vol glissante
+  rolling_vol_annualize: true
+  beta_lookback_days: 63        # ~3 mois pour le beta
+  drawdown_window: 252          # fenêtre max drawdown
+
+# ── Alertes de risque ─────────────────────────
+alerts:
+  var_threshold_pct: 2.0        # alerte si VaR > 2% du NAV
+  drawdown_threshold_pct: 5.0   # alerte si drawdown > 5%
+  gross_exposure_max: 2.0       # levier max (2x)
+  net_exposure_min: -0.5        # net exposure min (-50%)
+  net_exposure_max: 1.5         # net exposure max (+150%)
+  single_position_max_pct: 40.0 # concentration max par position
+
+# ── Logging ───────────────────────────────────
+logging:
+  level: "INFO"
+  file: "logs/dashboard.log"

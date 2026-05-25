@@ -1,0 +1,51 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────
+#  Real-Time Delta One Risk Dashboard
+#  docker-compose (local dev)
+# ─────────────────────────────────────────────
+
+services:
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delta1-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data       # persiste la base SQLite
+      - ./logs:/app/logs
+    environment:
+      - ENVIRONMENT=dev
+      - DB_TYPE=sqlite
+      - DB_PATH=data/dashboard.db
+    restart: unless-stopped
+    depends_on:
+      - db
+    networks:
+      - delta1-net
+
+  db:
+    image: postgres:15-alpine
+    container_name: delta1-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: delta1_secret
+      POSTGRES_DB: delta_one_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - delta1-net
+    profiles:
+      - postgres   # activé seulement avec: docker-compose --profile postgres up
+
+volumes:
+  postgres_data:
+
+networks:
+  delta1-net:
+    driver: bridge
