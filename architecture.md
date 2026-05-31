@@ -22,9 +22,10 @@ en temps quasi-réel via un dashboard interactif.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      COMPUTATION LAYER                              │
 │                                                                     │
-│   portfolio.py  ──►  pnl.py  ──►  risk.py                         │
-│   (positions,        (PnL,         (VaR, vol,                      │
-│    expositions)       intraday)     beta, correl)                  │
+│   portfolio.py  ──►  pnl.py  ──►  risk.py  ──►  stress.py         │
+│   (positions,        (PnL,         (VaR, vol,     (4 scenarios,    │
+│    expositions)       intraday)     beta, correl,   sVaR, custom)  │
+│                                     Sharpe/Sortino)                │
 └─────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
@@ -130,15 +131,24 @@ en temps quasi-réel via un dashboard interactif.
   - compute_correlation()       ← matrice de corrélation
   - compute_drawdown()          ← max drawdown glissant
   - compute_tracking_error()    ← std(portfolio_ret - benchmark_ret) × √252
+  - compute_sharpe_ratio()      ← (R_ptf - R_rf) / σ × √252
+  - compute_sortino_ratio()     ← (R_ptf - R_rf) / σ_downside × √252
+        │
+        ▼
+  stress.py
+  - run_all_scenarios()         ← 4 scénarios prédéfinis (Crash, VIX, FX, Rally)
+  - build_custom_scenario()     ← chocs manuels via sliders
+  - compute_stressed_var()      ← sVaR = VaR paramétrique × vol_multiplier
         │
         ▼
   dashboard.py
-  - st.metric()   : KPIs
-  - px.line()     : PnL historique
-  - px.bar()      : expositions
+  - st.metric()   : KPIs (NAV, PnL, VaR, Sharpe, Sortino, beta…)
+  - px.line()     : PnL historique + NAV normalisée vs SPY (base 100)
+  - px.bar()      : expositions géo / asset class / PnL attribution
   - px.imshow()   : heatmap corrélation
-  - st.dataframe(): table positions
-  - alertes       : dépassement seuils VaR / drawdown
+  - st.dataframe(): table positions colorisée
+  - alertes       : dépassement seuils VaR / drawdown / levier / concentration
+  - stress        : 4 scénarios + custom sliders + sVaR
 ```
 
 ---
@@ -181,4 +191,22 @@ MaxDrawdown = min(Drawdown_t)
 ### Tracking Error
 ```
 TE = std(R_portfolio − R_benchmark) × √252
+```
+
+### Sharpe Ratio
+```
+Sharpe = (R_portfolio − R_rf) / σ_portfolio × √252
+R_rf = taux sans risque annualisé / 252 (T-bill US, ~4.5%)
+```
+
+### Sortino Ratio
+```
+Sortino = (R_portfolio − R_rf) / σ_downside × √252
+σ_downside = std(R_t pour R_t < 0) × √252   (volatilité négative uniquement)
+```
+
+### Stressed VaR (sVaR)
+```
+sVaR = -(μ + z_α × σ × vol_multiplier) × NAV
+vol_multiplier : 2.5x (Equity Crash), 2.0x (VIX Spike), 1.3x (FX Shock)
 ```
