@@ -38,6 +38,11 @@ from src.risk import (
     generate_risk_alerts,
     compute_drawdown_series,
 )
+from src.stress import (
+    SCENARIOS,
+    run_all_scenarios,
+    build_custom_scenario,
+)
 
 # ─── Page config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -189,6 +194,25 @@ def load_all_data(period: str, bench: str):
     pnl_attr = compute_pnl_attribution(positions)
     top_movers = get_top_movers(positions)
 
+    # ── Courbe NAV normalisée vs benchmark ──────────────────────────────────
+    # Normalise les deux séries à 100 au début de la période
+    # pour comparer les performances sur la même base
+    nav_vs_bench = pd.DataFrame()
+    if not pnl_hist.empty and "portfolio_pnl" in pnl_hist.columns:
+        date_col = "Date" if "Date" in pnl_hist.columns else pnl_hist.columns[0]
+        initial_nav = (positions["entry_price"] * positions["quantity"].abs()).sum()
+        portfolio_values = pnl_hist.set_index(date_col)["portfolio_pnl"] + initial_nav
+        nav_norm = portfolio_values / portfolio_values.iloc[0] * 100
+
+        if bench in returns.columns:
+            bench_prices = (1 + returns[bench]).cumprod() * 100
+            bench_prices.index = returns.index
+            combined = pd.DataFrame({
+                "Portfolio": nav_norm,
+                bench: bench_prices,
+            }).dropna()
+            nav_vs_bench = combined.reset_index()
+
     return {
         "positions": positions,
         "returns": returns,
@@ -201,6 +225,7 @@ def load_all_data(period: str, bench: str):
         "corr_matrix": corr_matrix,
         "pnl_attr": pnl_attr,
         "top_movers": top_movers,
+        "nav_vs_bench": nav_vs_bench,
     }
 
 
@@ -260,7 +285,10 @@ for col, (label, value, delta) in zip(kpi_cols, kpis):
 
 # ─── Section 2 : Risk KPIs ──────────────────────────────────────────────────
 st.markdown("")
-risk_cols = st.columns(4)
+risk_cols = st.columns(6)
+
+sharpe  = risk.get("sharpe_ratio", 0)
+sortino = risk.get("sortino_ratio", 0)
 
 risk_kpis = [
     ("VaR 95% (hist.)", fmt_currency(risk.get("var_95_historical", 0)),
@@ -268,6 +296,10 @@ risk_kpis = [
     ("Max Drawdown", f"{risk.get('max_drawdown_pct', 0):.2f}%", None),
     ("Ann. Volatility", f"{risk.get('portfolio_volatility_pct', 0):.2f}%", None),
     ("Tracking Error", f"{risk.get('tracking_error_pct', 0):.2f}%", f"vs {benchmark}"),
+    ("Sharpe Ratio",  f"{sharpe:.2f}",
+     "✅ Good" if sharpe > 1 else ("⚠️ Low" if sharpe > 0 else "🔴 Negative")),
+    ("Sortino Ratio", f"{sortino:.2f}",
+     "✅ Good" if sortino > 1 else ("⚠️ Low" if sortino > 0 else "🔴 Negative")),
 ]
 
 for col, (label, value, delta) in zip(risk_cols, risk_kpis):
@@ -358,6 +390,69 @@ with right_col:
                 f'{row["intraday_pct"]:+.2f}%</span>',
                 unsafe_allow_html=True,
             )
+
+st.markdown("---")
+
+# ─── Section 3b : NAV normalisée vs Benchmark ───────────────────────────────
+st.markdown('<p class="section-title">📈 Portfolio vs Benchmark (Base 100)</p>', unsafe_allow_html=True)
+
+nav_vs_bench = data.get("nav_vs_bench", pd.DataFrame())
+
+if not nav_vs_bench.empty:
+    date_col_nb = nav_vs_bench.columns[0]
+    portfolio_final  = nav_vs_bench["Portfolio"].iloc[-1]
+    bench_final      = nav_vs_bench[benchmark].iloc[-1]
+    port_perf        = portfolio_final - 100
+    bench_perf       = bench_final - 100
+    outperf          = port_perf - bench_perf
+
+    # KPIs de performance relative
+    kp1, kp2, kp3 = st.columns(3)
+    kp1.metric("Portfolio Return", f"{port_perf:+.2f}%",
+               delta=f"Base 100 → {portfolio_final:.1f}")
+    kp2.metric(f"{benchmark} Return", f"{bench_perf:+.2f}%",
+               delta=f"Base 100 → {bench_final:.1f}")
+    kp3.metric("Alpha (vs Benchmark)", f"{outperf:+.2f}%",
+               delta="outperforming" if outperf >= 0 else "underperforming")
+
+    # Graphique
+    fig_nav = go.Figure()
+    fig_nav.add_trace(go.Scatter(
+        x=nav_vs_bench[date_col_nb],
+        y=nav_vs_bench["Portfolio"],
+        name="Portfolio",
+        line=dict(color="#4299e1", width=2.5),
+        fill="tozeroy",
+        fillcolor="rgba(66,153,225,0.05)",
+    ))
+    fig_nav.add_trace(go.Scatter(
+        x=nav_vs_bench[date_col_nb],
+        y=nav_vs_bench[benchmark],
+        name=benchmark,
+        line=dict(color="#ed8936", width=2, dash="dot"),
+    ))
+    fig_nav.add_hline(
+        y=100, line_dash="dash",
+        line_color="#4a5568", line_width=1,
+        annotation_text="Inception (Base 100)",
+        annotation_position="bottom right",
+        annotation_font_color="#718096",
+    )
+    fig_nav.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0e1117",
+        plot_bgcolor="#0e1117",
+        height=300,
+        showlegend=True,
+        legend=dict(orientation="h", y=1.05),
+        margin=dict(l=0, r=0, t=20, b=0),
+        yaxis=dict(gridcolor="#1a1f2e", ticksuffix=""),
+        xaxis=dict(gridcolor="#1a1f2e"),
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig_nav, use_container_width=True)
+else:
+    st.info("NAV chart requires PnL history data.")
 
 st.markdown("---")
 
@@ -532,7 +627,146 @@ with dd_col:
 
 st.markdown("---")
 
-# ─── Section 7 : Raw data (optionnel) ───────────────────────────────────────
+# ─── Section 7 : Stress Testing ─────────────────────────────────────────────
+st.markdown('<p class="section-title">⚡ Stress Testing & Scenario Analysis</p>', unsafe_allow_html=True)
+st.markdown(
+    "<small style='color:#a0aec0'>Simule l'impact de chocs de marché sur le portefeuille. "
+    "Méthode : choc appliqué sur les prix actuels + VaR stressée (σ × vol multiplier).</small>",
+    unsafe_allow_html=True,
+)
+
+# Calcule tous les scénarios
+scenario_results = run_all_scenarios(pos, data["returns"])
+nav = summary["nav"]
+
+# ── Tableau récapitulatif des scénarios ──────────────────────────────────────
+current_total_pnl = summary["total_pnl"]
+
+scenario_rows = []
+for r in scenario_results:
+    scenario_rows.append({
+        "Scenario":           r["scenario"],
+        "PnL Impact ($)":     r["pnl_impact"],
+        "PnL Impact (% NAV)": r["pnl_impact_pct"],
+        "PnL After Shock ($)": current_total_pnl + r["pnl_impact"],   # ← corrigé
+        "Stressed VaR ($)":   r["stressed_var"],
+        "Worst Position":     f"{r['worst_position']} (${r['worst_pnl_impact']:,.0f})",
+        "Vol Multiplier":     f"{r['vol_multiplier']}×",
+    })
+scenario_df = pd.DataFrame(scenario_rows)
+
+def color_impact(val):
+    try:
+        color = "#48bb78" if float(val) >= 0 else "#fc8181"
+        return f"color: {color}; font-weight: bold"
+    except Exception:
+        return ""
+
+styled_scenarios = scenario_df.style\
+    .applymap(color_impact, subset=["PnL Impact ($)", "PnL Impact (% NAV)", "PnL After Shock ($)"])\
+    .format({
+        "PnL Impact ($)":      "${:,.0f}",
+        "PnL Impact (% NAV)":  "{:+.2f}%",
+        "PnL After Shock ($)": "${:,.0f}",
+        "Stressed VaR ($)":    "${:,.0f}",
+    })
+
+st.dataframe(styled_scenarios, use_container_width=True, height=185)
+
+# ── Graphique waterfall PnL impact par scénario ──────────────────────────────
+fig_stress = go.Figure(go.Bar(
+    x=[r["scenario"] for r in scenario_results],
+    y=[r["pnl_impact"] for r in scenario_results],
+    marker_color=["#fc8181" if r["pnl_impact"] < 0 else "#48bb78" for r in scenario_results],
+    text=[f"${r['pnl_impact']:,.0f}" for r in scenario_results],
+    textposition="outside",
+))
+fig_stress.update_layout(
+    template="plotly_dark",
+    paper_bgcolor="#0e1117",
+    plot_bgcolor="#0e1117",
+    height=280,
+    showlegend=False,
+    title=dict(text="PnL Impact by Scenario ($)", font=dict(size=12, color="#a0aec0"), x=0),
+    margin=dict(l=0, r=0, t=40, b=0),
+    yaxis=dict(gridcolor="#1a1f2e", zeroline=True, zerolinecolor="#4a5568"),
+    xaxis=dict(gridcolor="#1a1f2e"),
+)
+st.plotly_chart(fig_stress, use_container_width=True)
+
+# ── Détail par scénario (expandable) ─────────────────────────────────────────
+st.markdown("**Détail par scénario**")
+cols_detail = st.columns(len(scenario_results))
+for col, r in zip(cols_detail, scenario_results):
+    with col:
+        color = "#fc8181" if r["pnl_impact"] < 0 else "#48bb78"
+        st.markdown(
+            f"<div style='background:#1a1f2e; border:1px solid #2d3748; border-radius:8px; padding:10px;'>"
+            f"<div style='font-size:11px; color:#a0aec0; margin-bottom:4px'>{r['scenario']}</div>"
+            f"<div style='font-size:16px; font-weight:bold; color:{color}'>${r['pnl_impact']:,.0f}</div>"
+            f"<div style='font-size:10px; color:#718096'>{r['pnl_impact_pct']:+.2f}% of NAV</div>"
+            f"<div style='font-size:10px; color:#718096; margin-top:4px'>sVaR: ${r['stressed_var']:,.0f}</div>"
+            f"<div style='font-size:10px; color:#fc8181; margin-top:2px'>↓ {r['worst_position']}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+st.markdown("")
+
+# ── Scénario personnalisé ─────────────────────────────────────────────────────
+with st.expander("⚙️ Custom Scenario — définir tes propres chocs"):
+    st.markdown("<small style='color:#a0aec0'>Ajuste le choc % sur chaque ticker et observe l'impact en temps réel.</small>", unsafe_allow_html=True)
+
+    tickers_pos = pos["ticker"].tolist()
+    custom_shocks = {}
+    shock_cols = st.columns(len(tickers_pos))
+    for col, ticker in zip(shock_cols, tickers_pos):
+        with col:
+            shock = col.slider(
+                f"{ticker} (%)",
+                min_value=-30, max_value=30, value=0, step=1,
+                key=f"shock_{ticker}",
+            )
+            custom_shocks[ticker] = shock / 100.0
+
+    vol_mult = st.slider("Vol Multiplier", min_value=0.5, max_value=4.0, value=1.0, step=0.1)
+
+    custom_result = build_custom_scenario(pos, data["returns"], custom_shocks, vol_mult)
+    pnl_color = "#48bb78" if custom_result["pnl_impact"] >= 0 else "#fc8181"
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("PnL Impact", f"${custom_result['pnl_impact']:,.0f}",
+              delta=f"{custom_result['pnl_impact_pct']:+.2f}% of NAV")
+    c2.metric("Stressed PnL", f"${custom_result['total_stressed_pnl']:,.0f}")
+    c3.metric("Stressed VaR", f"${custom_result['stressed_var']:,.0f}")
+    c4.metric("Stressed Net Exp.", f"${custom_result['stressed_net']:,.0f}")
+
+    # Détail par position du scénario custom
+    stress_detail = custom_result["stressed_positions"][[
+        "ticker", "current_price", "stressed_price", "shock_pct",
+        "pnl", "stressed_pnl", "pnl_impact"
+    ]].copy()
+    stress_detail.columns = [
+        "Ticker", "Current Price", "Stressed Price", "Shock (%)",
+        "Current PnL ($)", "Stressed PnL ($)", "PnL Impact ($)"
+    ]
+    st.dataframe(
+        stress_detail.style
+        .applymap(color_impact, subset=["PnL Impact ($)"])
+        .format({
+            "Current Price": "{:.2f}", "Stressed Price": "{:.2f}",
+            "Shock (%)": "{:+.1%}",
+            "Current PnL ($)": "${:,.0f}",
+            "Stressed PnL ($)": "${:,.0f}",
+            "PnL Impact ($)": "${:,.0f}",
+        }),
+        use_container_width=True,
+        height=180,
+    )
+
+st.markdown("---")
+
+# ─── Section 9 : Raw data (optionnel) ───────────────────────────────────────
 if show_raw_data:
     st.markdown('<p class="section-title">🔍 Raw Data</p>', unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs(["Positions", "PnL History", "Returns"])

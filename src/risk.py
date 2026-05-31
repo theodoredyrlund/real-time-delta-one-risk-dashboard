@@ -262,6 +262,67 @@ def compute_tracking_error(
     return round(float(te) * 100, 2)
 
 
+# ─── Sharpe & Sortino ────────────────────────────────────────────────────────
+
+def compute_sharpe_ratio(
+    portfolio_returns: pd.Series,
+    risk_free_rate: float = 0.045,
+) -> float:
+    """
+    Sharpe Ratio annualisé.
+
+    Formule : Sharpe = (R_portfolio - R_rf) / sigma_portfolio × √252
+
+    Mesure le rendement excédentaire par unité de risque total.
+    Un Sharpe > 1 est considéré bon, > 2 excellent.
+
+    Args:
+        portfolio_returns: série de rendements journaliers
+        risk_free_rate:    taux sans risque annualisé (défaut 4.5% = T-bill US 2026)
+
+    Returns:
+        float: Sharpe Ratio annualisé
+    """
+    if portfolio_returns.empty or portfolio_returns.std() == 0:
+        return 0.0
+    rf_daily = risk_free_rate / 252
+    excess   = portfolio_returns - rf_daily
+    sharpe   = excess.mean() / excess.std() * np.sqrt(252)
+    return round(float(sharpe), 2)
+
+
+def compute_sortino_ratio(
+    portfolio_returns: pd.Series,
+    risk_free_rate: float = 0.045,
+) -> float:
+    """
+    Sortino Ratio annualisé.
+
+    Formule : Sortino = (R_portfolio - R_rf) / sigma_downside × √252
+
+    Différence vs Sharpe : utilise uniquement la volatilité des rendements
+    négatifs (downside deviation) — ne pénalise pas la volatilité à la hausse.
+    Plus pertinent pour les desks qui ont des rendements asymétriques.
+
+    Args:
+        portfolio_returns: série de rendements journaliers
+        risk_free_rate:    taux sans risque annualisé
+
+    Returns:
+        float: Sortino Ratio annualisé
+    """
+    if portfolio_returns.empty:
+        return 0.0
+    rf_daily      = risk_free_rate / 252
+    excess        = portfolio_returns - rf_daily
+    downside      = excess[excess < 0]
+    downside_std  = downside.std() * np.sqrt(252)
+    if downside_std == 0:
+        return 0.0
+    sortino = excess.mean() * np.sqrt(252) / downside_std
+    return round(float(sortino), 2)
+
+
 # ─── Risk Report complet ─────────────────────────────────────────────────────
 
 def compute_full_risk_report(
@@ -303,9 +364,9 @@ def compute_full_risk_report(
     portfolio_vol = compute_portfolio_volatility(positions, returns)
     portfolio_beta = compute_portfolio_beta(positions, returns, benchmark_ticker)
 
-    # Tracking error
+    # Tracking error + Sharpe + Sortino
+    port_ret = pd.Series(dtype=float)
     if benchmark_ticker in returns.columns and not returns.empty:
-        # Calcule le rendement pondéré du portefeuille
         weights = {}
         for _, pos in positions.iterrows():
             t = pos["ticker"]
@@ -321,6 +382,10 @@ def compute_full_risk_report(
     else:
         te = 0.0
 
+    rf = config.get("risk", {}).get("risk_free_rate", 0.045)
+    sharpe  = compute_sharpe_ratio(port_ret, rf)  if not port_ret.empty else 0.0
+    sortino = compute_sortino_ratio(port_ret, rf) if not port_ret.empty else 0.0
+
     return {
         "var_95_historical": var_hist,
         "var_95_parametric": var_param,
@@ -329,6 +394,8 @@ def compute_full_risk_report(
         "portfolio_volatility_pct": portfolio_vol,
         "portfolio_beta": portfolio_beta,
         "tracking_error_pct": te,
+        "sharpe_ratio": sharpe,
+        "sortino_ratio": sortino,
     }
 
 

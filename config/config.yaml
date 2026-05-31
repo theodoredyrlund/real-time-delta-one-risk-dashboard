@@ -16,23 +16,23 @@ portfolio:
     - ticker: "SPY"
       name: "S&P 500 ETF"
       quantity: 500
-      entry_price: 745.64
+      entry_price: 678.48
       side: "long"
       asset_class: "Equity ETF"
       geography: "US"
 
-    - ticker: "QQQ"
-      name: "Nasdaq 100 ETF"
-      quantity: -300
-      entry_price: 717.64
+    - ticker: "TLT"
+      name: "iShares 20+ Year Treasury Bond ETF"
+      quantity: -400
+      entry_price: 88.75
       side: "short"
-      asset_class: "Equity ETF"
+      asset_class: "Bond ETF"
       geography: "US"
 
     - ticker: "EWQ"
       name: "iShares MSCI France ETF (Euro Stoxx proxy)"
       quantity: 400
-      entry_price: 45.17
+      entry_price: 45.07
       side: "long"
       asset_class: "Equity ETF"
       geography: "Europe"
@@ -40,7 +40,7 @@ portfolio:
     - ticker: "IWM"
       name: "Russell 2000 ETF"
       quantity: 200
-      entry_price: 285.12
+      entry_price: 258.78
       side: "long"
       asset_class: "Equity ETF"
       geography: "US"
@@ -68,7 +68,7 @@ market_data:
   history_interval: "1d"        # 1d | 1h | 5m
   tickers:
     - "SPY"
-    - "QQQ"
+    - "TLT"
     - "EWQ"
     - "IWM"
     - "^GSPC"    # S&P 500 index (benchmark)
@@ -88,6 +88,7 @@ database:
 
 # ── Paramètres de risque ──────────────────────
 risk:
+  risk_free_rate: 0.045         # taux sans risque annualisé (T-bill US ~4.5%)
   var_confidence: 0.95          # niveau de confiance VaR
   var_lookback_days: 252        # fenêtre historique VaR
   rolling_vol_window: 20        # jours pour vol glissante

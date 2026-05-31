@@ -60,12 +60,12 @@ the cloud target stack (AWS S3, RDS, ECS, Kinesis).
 
 Simulated Delta One portfolio:
 
-| Ticker | Name | Side | Qty |
-|--------|------|------|-----|
-| SPY | S&P 500 ETF | Long | +500 |
-| QQQ | Nasdaq 100 ETF | Short | -300 |
-| EWQ | iShares MSCI France ETF | Long | +400 |
-| IWM | Russell 2000 ETF | Long | +200 |
+| Ticker | Name | Side | Qty | Rationale |
+|--------|------|------|-----|-----------|
+| SPY | S&P 500 ETF | Long | +500 | Core US equity exposure |
+| TLT | 20+ Year Treasury Bond ETF | Short | -400 | Rates hedge — bonds fall when rates rise |
+| EWQ | iShares MSCI France ETF | Long | +400 | European equity exposure |
+| IWM | Russell 2000 ETF | Long | +200 | US small cap diversification |
 
 Indicators (not positions): `^VIX`, `EURUSD=X`
 
@@ -83,6 +83,10 @@ Indicators (not positions): `^VIX`, `EURUSD=X`
 | Maximum Drawdown | `(P_t - max(P)) / max(P)` |
 | Correlation Matrix | Pearson on daily log returns |
 | Tracking Error | `std(R_portfolio - R_benchmark) × √252` |
+| Sharpe Ratio | `(R_portfolio - R_rf) / σ × √252` |
+| Sortino Ratio | `(R_portfolio - R_rf) / σ_downside × √252` |
+| NAV vs Benchmark | Normalized to 100 at inception |
+| Stress Testing | 4 scenarios + custom sliders (sVaR) |
 
 ---
 
