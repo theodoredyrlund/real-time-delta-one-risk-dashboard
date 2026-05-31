@@ -12,9 +12,11 @@
 
 ## 📸 Preview
 
-![Dashboard - Portfolio Summary & PnL](docs/dashboard_screenshot.png)
+![Dashboard - KPIs, PnL History & NAV vs Benchmark](docs/dashboard_screenshot_1.png)
 
-![Dashboard - Correlations & Drawdown](docs/dashboard_screenshot_2.png)
+![Dashboard - Position Book, Exposures, Correlation & Drawdown](docs/dashboard_screenshot_2.png)
+
+![Dashboard - Stress Testing & Scenario Analysis](docs/dashboard_screenshot_3.png)
 
 ---
 
